@@ -23,13 +23,14 @@ class ONProcess():
             if (version == 15):
                 self.process = win32com.client.gencache.EnsureDispatch(ON15_APP_ID)
                 self.namespace = ON15_SCHEMA
-            if (version == 14):
+            elif (version == 14):
                 self.process = win32com.client.gencache.EnsureDispatch(ON14_APP_ID)
-                self.namespace = ON14_SCHEMA         
-        except Exception as e:
-            print (e)
-            print("error starting onenote {}".format(version))
-
+                self.namespace = ON14_SCHEMA
+            else:
+                raise Exception("Invalid OneNote version: {}".format(version))
+        except Exception:
+            raise
+            
 
     def get_hierarchy(self, start_node_id="", hierarchy_scope=4):
         """
@@ -142,6 +143,7 @@ class ONProcess():
             self.process.Publish(hierarchy_id, target_file_path, publish_format, clsid_of_exporter)
         except Exception as e: 
             print("Could not Publish")
+            raise e
 
     def open_package(self, path_package, path_dest):
         try:
