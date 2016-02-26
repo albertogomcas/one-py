@@ -1,6 +1,6 @@
+import setuptools
+from setuptools import setup
 import os
-from distutils.core import setup
-
 
 def get_version():
     with open(os.path.join('onepy', '__init__.py')) as f:
