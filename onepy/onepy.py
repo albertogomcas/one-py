@@ -1,22 +1,123 @@
 from .onmanager import ONProcess
-from xml.etree import cElementTree
+import lxml.etree as ET
+from lxml.builder import ElementMaker
+import time
+
+__all__ = ["OneNote", "PageEditor"]
 
 namespace = ""
 
 class OneNote():
-
-    def __init__(self, version=15):
+    def __init__(self, version=14):
         self.process = ONProcess(version=version)
         global namespace
         namespace = self.process.namespace
-        self.object_tree = cElementTree.fromstring(self.process.get_hierarchy("",4))
+        self.object_tree = ET.fromstring(self.process.get_hierarchy("",4))
         self.hierarchy = Hierarchy(self.object_tree)
         
     def get_page_content(self, page_id, page_info=0):
-        page_content_xml = cElementTree.fromstring(self.process.get_page_content(page_id, page_info))
+        page_content_xml = ET.fromstring(self.process.get_page_content(page_id, page_info))
         return PageContent(page_content_xml)
-        
 
+class PageEditor():
+    def __init__(self, version=14):
+        self._process = ONProcess(version=version)
+        self._namespace = self._process.namespace
+        self._page = None
+        #ET.register_namespace("one", self._namespace)
+        self._xml = None
+        self._title = None
+        self._flat_contents = []
+
+    def create(self, section, title, lines=None):
+        now = time.time()
+        self._process.create_new_page(section.id)
+        #get the newly created page, regenerate hierarchy
+        refresh_section_xml = self._process.get_hierarchy(section.id,4)
+        refresh_section = Section(ET.fromstring(refresh_section_xml))
+        assert refresh_section.id == section.id
+        self.open(refresh_section[-1])
+        creation = time.mktime(time.strptime(self._page.date_time, "%Y-%m-%dT%H:%M:%S.%fZ"))
+        if creation - now > 5:
+            raise Exception("Page is too old to be freshly created, something when wrong?")
+            
+        self.update_title(title)
+        
+        if lines:
+            self.update_lines(lines)
+
+    def createOutline(self):
+        pass
+    
+    def add_lines(self, lines):
+        maker = ElementMaker(namespace="one")
+        root = maker.root()
+        root.append(maker.Outline())
+        root[0].append(maker.OEChildren())
+        
+        for index, line in enumerate(lines):
+            root[0][0].append(maker.OE())
+            root[0][0][index].append(maker.T(line))        
+        
+        ns = {"one":"http://schemas.microsoft.com/office/onenote/2010/onenote"}
+        page = ET.fromstring(self._process.get_page_content(self._page.id))
+        oechildren = page.find(".//one:Outline/one:OEChildren", ns)        
+        if oechildren is not None:
+            for oe in root[0][0]:
+                oechildren.append(oe)        
+        else:
+            page.append(root[0])
+                 
+        self._process.update_page_content( #bit of a HACK to clean the dammed "ns0"
+            ET.tostring(page).replace(b"ns0",b"one").replace(b'xmlns:one="one"', b""))
+                
+        self._flatten()
+
+    def open(self, page):
+        self._page = page
+        self._flatten()
+
+    def _flatten(self):
+        """Expose each line without the xml nesting"""
+        self._xml = ET.fromstring(self._process.get_page_content(self._page.id))
+        flat = list(self._xml.iter(self._namespace+'T'))
+        self._title = flat[0]
+        self._flat_contents = flat[1:]
+
+    def _push(self):
+        self._process.update_page_content(b'<?xml version="1.0"?>\n' + ET.tostring(self._xml))
+        #refresh
+        self._flatten()        
+
+    def print(self):
+        print("Title: {}".format(self._title.text))
+        print("\n".join(node.text if node.text else "" for node in self._flat_contents))
+
+    def get_lines(self, start=0, end=None):
+        if end is None:
+            end = len(self._flat_contents)
+            
+        return [node.text if node.text else "" for node in self._flat_contents[start:end]]
+
+    def update_title(self, newtitle):
+        self._title.text = newtitle
+        self._push()
+
+    def update_lines(self, lines, start=0):
+        """Modify the content of lines[start:end]""" 
+        for xml_line, newline in zip(self._flat_contents[start:], lines):
+            xml_line.text = newline
+        
+        self._push()
+    
+    def format_lines(self, linenumbers, key, value):
+        if not isinstance(linenumbers, list):
+            linenumbers=[linenumbers]
+        for n in linenumbers:
+            self._flat_contents[n].set(key, value)
+            
+        self._push()
+    
 class Hierarchy():
 
     def __init__(self, xml=None):
@@ -205,6 +306,7 @@ class PageContent(Node):
         self.files = []
         if (xml != None):
             self.__deserialize_from_xml(xml)
+            self._xml = xml
 
     def __deserialize_from_xml(self, xml):
             self.name = xml.get("name")
@@ -228,8 +330,8 @@ class PageContent(Node):
                 elif (node.tag == namespace + "Title"):
                     self._children.append(Title(node))    
                 elif (node.tag == namespace + "MediaPlaylist"):
-                    self.media_playlist = MediaPlaylist(node, self)
-
+                    self.media_playlist = MediaPlaylist(node, self)       
+    
 
 class Title(Node):
 
@@ -263,6 +365,7 @@ class Outline(Node):
         self.id = ""
         if (xml != None):
             self.__deserialize_from_xml(xml)
+            self._xml = xml
 
     def __str__(self):
         return "Outline"
@@ -329,6 +432,7 @@ class OE(Node):
         self.media_indices = []
         if (xml != None):
             self.__deserialize_from_xml(xml)
+            self._xml = xml
 
     def __str__(self):
         try:

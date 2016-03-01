@@ -1,4 +1,7 @@
 import win32com.client
+import pywintypes
+import datetime
+import pytz
 
 if win32com.client.gencache.is_readonly == True:
     win32com.client.gencache.is_readonly = False
@@ -30,7 +33,11 @@ class ONProcess():
                 raise Exception("Invalid OneNote version: {}".format(version))
         except Exception:
             raise
-            
+    
+    @staticmethod        
+    def default_date():
+        #see http://stackoverflow.com/questions/34904094/how-to-debug-win32com-call-in-python
+        return pytz.utc.localize(datetime.datetime(year=1899, month=12, day=30))
 
     def get_hierarchy(self, start_node_id="", hierarchy_scope=4):
         """
@@ -47,7 +54,7 @@ class ONProcess():
         try:
             self.process.UpdateHierarchy(changes_xml_in)
         except Exception as e: 
-            print("Could not Update Hierarchy")
+            print("Could not Update Hierarchy: {}".format(e))
 
     def open_hierarchy(self, path, relative_to_object_id, object_id, create_file_type=0):
         """
@@ -60,14 +67,14 @@ class ONProcess():
         try:
             return(self.process.OpenHierarchy(path, relative_to_object_id, "", create_file_type))
         except Exception as e: 
-            print("Could not Open Hierarchy")
+            print("Could not Open Hierarchy: {}".format(e))
 
 
     def delete_hierarchy (self, object_id, excpect_last_modified=""):
         try:
             self.process.DeleteHierarchy(object_id, excpect_last_modified)
         except Exception as e: 
-            print("Could not Delete Hierarchy")
+            print("Could not Delete Hierarchy: {}".format(e))
 
     def create_new_page (self, section_id, new_page_style=0):
         """
@@ -79,13 +86,13 @@ class ONProcess():
         try:
             self.process.CreateNewPage(section_id, "", new_page_style)
         except Exception as e: 
-            print("Unable to create the page")
+            print("Unable to create the page: {}".format(e))
             
     def close_notebook(self, notebook_id):
         try:
             self.process.CloseNotebook(notebook_id)
         except Exception as e: 
-            print("Could not Close Notebook")
+            print("Could not Close Notebook: {}".format(e))
 
     def get_page_content(self, page_id, page_info=0):
         """
@@ -98,25 +105,29 @@ class ONProcess():
         try:
             return(self.process.GetPageContent(page_id, "", page_info))
         except Exception as e: 
-            print("Could not get Page Content")
+            print("Could not get Page Content: {}".format(e))
             
-    def update_page_content(self, page_changes_xml_in, excpect_last_modified=0):
+    def update_page_content(self, page_changes_xml_in, expect_last_modified=None):
+        if expect_last_modified is None:
+            expect_last_modified = self.default_date()
         try:
-            self.process.UpdatePageContent(page_changes_xml_in, excpect_last_modified)
+            self.process.UpdatePageContent(page_changes_xml_in, expect_last_modified)
         except Exception as e: 
-            print("Could not Update Page Content")
+            print("Could not Update Page Content: {}".format(e))
             
     def get_binary_page_content(self, page_id, callback_id):
         try:
             return(self.process.GetBinaryPageContent(page_id, callback_id))
         except Exception as e: 
-            print("Could not Get Binary Page Content")
+            print("Could not Get Binary Page Content: {}".format(e))
 
-    def delete_page_content(self, page_id, object_id, excpect_last_modified=0):
+    def delete_page_content(self, page_id, object_id, expect_last_modified=None):
+        if expect_last_modified is None:
+            expect_last_modified = self.default_date()
         try:
-            self.process.DeletePageContent(page_id, object_id, excpect_last_modified)
+            self.process.DeletePageContent(page_id, object_id, expect_last_modified)
         except Exception as e: 
-            print("Could not Delete Page Content")
+            print("Could not Delete Page Content: {}".format(e))
 
 
       # Actions
@@ -142,26 +153,25 @@ class ONProcess():
         try:
             self.process.Publish(hierarchy_id, target_file_path, publish_format, clsid_of_exporter)
         except Exception as e: 
-            print("Could not Publish")
-            raise e
+            print("Could not Publish: {}".format(e))
 
     def open_package(self, path_package, path_dest):
         try:
             return(self.process.OpenPackage(path_package, path_dest))
         except Exception as e: 
-            print("Could not Open Package")
+            print("Could not Open Package: {}".format(e))
 
     def get_hyperlink_to_object(self, hierarchy_id, target_file_path=""):
         try:
             return(self.process.GetHyperlinkToObject(hierarchy_id, target_file_path))
         except Exception as e: 
-            print("Could not Get Hyperlink")
+            print("Could not Get Hyperlink: {}".format(e))
 
     def find_pages(self, start_node_id, search_string, display):
         try:
             return(self.process.FindPages(start_node_id, search_string, "", False, display))
         except Exception as e: 
-            print("Could not Find Pages")
+            print("Could not Find Pages: {}".format(e))
 
     def get_special_location(self, special_location=0):
         """
@@ -173,5 +183,5 @@ class ONProcess():
         try:
             return(self.process.GetSpecialLocation(special_location))
         except Exception as e: 
-            print("Could not retreive special location")
+            print("Could not retrieve special location: {}".format(e))
     
