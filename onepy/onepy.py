@@ -2,6 +2,7 @@ from .onmanager import ONProcess
 import lxml.etree as ET
 from lxml.builder import ElementMaker
 import time
+import re
 
 __all__ = ["OneNote", "PageEditor"]
 
@@ -44,11 +45,19 @@ class PageEditor():
         self.update_title(title)
         
         if lines:
-            self.update_lines(lines)
+            self.add_lines(lines)
 
-    def createOutline(self):
-        pass
-    
+    def find_in_xml(self, patterns):
+        xml = self._process.get_page_content(self._page.id)
+        found = []
+        if not isinstance(patterns, (list, tuple)):
+            patterns = [patterns]
+        for p in patterns:
+            found.extend(re.findall(p, xml))
+        return found
+        
+ 
+   
     def add_lines(self, lines):
         maker = ElementMaker(namespace="one")
         root = maker.root()
@@ -57,7 +66,7 @@ class PageEditor():
         
         for index, line in enumerate(lines):
             root[0][0].append(maker.OE())
-            root[0][0][index].append(maker.T(line))        
+            root[0][0][index].append(maker.T(ET.CDATA(line)))        
         
         ns = {"one":"http://schemas.microsoft.com/office/onenote/2010/onenote"}
         page = ET.fromstring(self._process.get_page_content(self._page.id))
@@ -69,7 +78,7 @@ class PageEditor():
             page.append(root[0])
                  
         self._process.update_page_content( #bit of a HACK to clean the dammed "ns0"
-            ET.tostring(page).replace(b"ns0",b"one").replace(b'xmlns:one="one"', b""))
+            ET.tostring(page).replace(b"ns0:",b"one:").replace(b'xmlns:one="one"', b""))
                 
         self._flatten()
 
@@ -81,8 +90,12 @@ class PageEditor():
         """Expose each line without the xml nesting"""
         self._xml = ET.fromstring(self._process.get_page_content(self._page.id))
         flat = list(self._xml.iter(self._namespace+'T'))
-        self._title = flat[0]
-        self._flat_contents = flat[1:]
+        try:
+            self._title = flat[0]
+            self._flat_contents = flat[1:]
+        except IndexError:
+            self._title=''
+            self._flat_contents = []
 
     def _push(self):
         self._process.update_page_content(b'<?xml version="1.0"?>\n' + ET.tostring(self._xml))
@@ -117,6 +130,7 @@ class PageEditor():
             self._flat_contents[n].set(key, value)
             
         self._push()
+        
     
 class Hierarchy():
 
@@ -134,6 +148,9 @@ class Hierarchy():
             
     def __getitem__(self, key):
         return self._children[key]
+        
+    def __len__(self):
+        return len(self._children)
    
 class Node():
     def __init__(self):
@@ -147,7 +164,7 @@ class Node():
             return "NO_NAME"
 
     def __repr__(self):
-        return object.__repr__(self).rstrip(">") + " " + self.name + ">"
+        return object.__repr__(self).rstrip(">") + " " + str(self.name) + ">"
 
     def __getitem__(self, key):
         return self._children[key]            
@@ -155,6 +172,10 @@ class Node():
     def __iter__(self):
         for c in self._children:
             yield c
+     
+    def __len__(self):
+        return len(self._children)
+    
 
 class HierarchyNode(Node):
 
