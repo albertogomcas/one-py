@@ -106,6 +106,7 @@ class ONProcess():
             return(self.process.GetPageContent(page_id, "", page_info))
         except Exception as e: 
             print("Could not get Page Content: {}".format(e))
+            raise
             
     def update_page_content(self, page_changes_xml_in, expect_last_modified=None):
         if expect_last_modified is None:
@@ -114,12 +115,14 @@ class ONProcess():
             self.process.UpdatePageContent(page_changes_xml_in, expect_last_modified)
         except Exception as e: 
             print("Could not Update Page Content: {}".format(e))
+            raise
             
     def get_binary_page_content(self, page_id, callback_id):
         try:
             return(self.process.GetBinaryPageContent(page_id, callback_id))
         except Exception as e: 
             print("Could not Get Binary Page Content: {}".format(e))
+            raise
 
     def delete_page_content(self, page_id, object_id, expect_last_modified=None):
         if expect_last_modified is None:

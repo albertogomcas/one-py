@@ -40,7 +40,7 @@ class PageEditor():
         self.open(refresh_section[-1])
         creation = time.mktime(time.strptime(self._page.date_time, "%Y-%m-%dT%H:%M:%S.%fZ"))
         if creation - now > 5:
-            raise Exception("Page is too old to be freshly created, something when wrong?")
+            raise Exception("Page is too old to be freshly created, something went wrong?")
             
         self.update_title(title)
         
@@ -48,7 +48,7 @@ class PageEditor():
             self.add_lines(lines)
 
     def find_in_xml(self, patterns):
-        xml = self._process.get_page_content(self._page.id)
+        xml = self._rawxml
         found = []
         if not isinstance(patterns, (list, tuple)):
             patterns = [patterns]
@@ -56,8 +56,29 @@ class PageEditor():
             found.extend(re.findall(p, xml))
         return found
         
- 
-   
+    def replace_in_xml(self, originals, replacements, dry_run=True, confirm=True):
+        skipped = []
+        applied = []
+        xml = self._rawxml
+        for orig, rep in zip(originals, replacements):
+            if confirm:
+                ok = input('\n\nReplace:\n{}\n\nwith:\n{}\n?[n for No]'.format(orig.replace('\r\n', ' '), rep))
+            else:
+                ok = 'Y'
+            if ok.upper() == 'N':
+                skipped.append(orig.replace('\r\n', ' '))
+                continue
+            else:
+                applied.append((orig.replace('\r\n', ' '), rep))
+            xml = re.sub(re.escape(orig), rep, xml)
+        if not dry_run:
+            self._process.update_page_content(b'<?xml version="1.0"?>\n' + ET.tostring(ET.fromstring(xml)))
+        else:
+            print('Dry run for page {} (changes not applied)'.format(self._page.name))
+
+        return applied, skipped
+
+        
     def add_lines(self, lines):
         maker = ElementMaker(namespace="one")
         root = maker.root()
@@ -88,7 +109,8 @@ class PageEditor():
 
     def _flatten(self):
         """Expose each line without the xml nesting"""
-        self._xml = ET.fromstring(self._process.get_page_content(self._page.id))
+        self._rawxml = self._process.get_page_content(self._page.id)
+        self._xml = ET.fromstring(self._rawxml)
         flat = list(self._xml.iter(self._namespace+'T'))
         try:
             self._title = flat[0]
@@ -143,8 +165,7 @@ class Hierarchy():
         self._children = [Notebook(n) for n in xml]
                 
     def __iter__(self):
-        for c in self._children:
-            yield c
+        yield from self._children
             
     def __getitem__(self, key):
         return self._children[key]
@@ -170,8 +191,7 @@ class Node():
         return self._children[key]            
 
     def __iter__(self):
-        for c in self._children:
-            yield c
+        yield from self._children
      
     def __len__(self):
         return len(self._children)
