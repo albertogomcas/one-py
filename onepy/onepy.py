@@ -55,6 +55,9 @@ class PageEditor():
         for p in patterns:
             found.extend(re.findall(p, xml))
         return found
+
+    def overwrite_content(self, newxml):
+        self._process.update_page_content(newxml)
         
     def replace_in_xml(self, originals, replacements, dry_run=True, confirm=True):
         skipped = []
